@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from typing import List, Optional
 
-from pydantic import Field, validator
+from pydantic import Field
 from pydantic_settings import BaseSettings
 
 
@@ -19,14 +19,14 @@ class Settings(BaseSettings):
     debug: bool = Field(default=False, env="DEBUG")
     
     # OpenAI Settings
-    openai_api_key: str = Field(..., env="OPENAI_API_KEY")
+    openai_api_key: str = Field(default="", env="OPENAI_API_KEY")
     openai_model: str = Field(default="gpt-3.5-turbo", env="OPENAI_MODEL")
     embedding_model: str = Field(default="text-embedding-ada-002", env="EMBEDDING_MODEL")
     
     # Database Settings
-    database_url: str = Field(..., env="DATABASE_URL")
+    database_url: str = Field(default="postgresql://raguser:ragpassword@localhost:5432/ragdb", env="DATABASE_URL")
     postgres_user: str = Field(default="raguser", env="POSTGRES_USER")
-    postgres_password: str = Field(..., env="POSTGRES_PASSWORD")
+    postgres_password: str = Field(default="ragpassword", env="POSTGRES_PASSWORD")
     postgres_db: str = Field(default="ragdb", env="POSTGRES_DB")
     
     # ChromaDB Settings
@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     
     # File Upload Settings
     max_file_size_mb: int = Field(default=50, env="MAX_FILE_SIZE_MB")
-    allowed_extensions: List[str] = Field(default=[".pdf", ".txt", ".docx"], env="ALLOWED_EXTENSIONS")
+    allowed_extensions_str: str = Field(default=".pdf,.txt,.docx", env="ALLOWED_EXTENSIONS")
     upload_directory: str = Field(default="./data/uploads", env="UPLOAD_DIRECTORY")
     
     # Document Processing Settings
@@ -50,22 +50,23 @@ class Settings(BaseSettings):
         env="LOG_FORMAT"
     )
     
-    @validator('allowed_extensions', pre=True)
-    def parse_extensions(cls, v):
-        if isinstance(v, str):
-            return [ext.strip() for ext in v.split(',')]
-        return v
+    @property
+    def allowed_extensions(self) -> List[str]:
+        """Parse allowed extensions from string."""
+        return [ext.strip() for ext in self.allowed_extensions_str.split(',')]
     
-    @validator('chroma_persist_directory', 'upload_directory')
-    def create_directory(cls, v):
-        """Ensure directories exist."""
-        path = Path(v)
-        path.mkdir(parents=True, exist_ok=True)
-        return str(path)
+    def model_post_init(self, __context) -> None:
+        """Create necessary directories after initialization.""" 
+        # Ensure directories exist
+        Path(self.chroma_persist_directory).mkdir(parents=True, exist_ok=True)
+        Path(self.upload_directory).mkdir(parents=True, exist_ok=True)
+        Path("./data/processed").mkdir(parents=True, exist_ok=True)
+        Path("logs").mkdir(parents=True, exist_ok=True)
     
     class Config:
         env_file = ".env"
         case_sensitive = False
+        extra = "ignore"  # Ignore extra fields in .env
 
 
 # Global settings instance
